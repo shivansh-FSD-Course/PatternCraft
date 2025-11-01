@@ -1,2 +1,1 @@
-# PatternCraft
-Repo for the Full Stack Development Course
+Peepeepoopoo I will add more stuff to it later

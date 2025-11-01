@@ -31,7 +31,7 @@ function Login() {
         
         alert(`Welcome back, ${data.user.name}! 🎉`)
         // Later we'll redirect to dashboard
-        navigate('/')
+        navigate('/dashboard')
       } else {
         setError(data.message || 'Login failed')
       }

@@ -1,6 +1,95 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 
+// Pattern List Component
+function PatternList() {
+  const [patterns, setPatterns] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPatterns();
+  }, []);
+
+  const fetchPatterns = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3000/api/upload/patterns', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPatterns(data);
+      }
+    } catch (error) {
+      console.error('Error fetching patterns:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPatternEmoji = (type) => {
+    switch(type) {
+      case 'fibonacci': return '🌀';
+      case 'sine_wave': return '🌊';
+      case 'exponential': return '📈';
+      default: return '❓';
+    }
+  };
+
+  const getPatternName = (type) => {
+    switch(type) {
+      case 'fibonacci': return 'Fibonacci Spiral';
+      case 'sine_wave': return 'Sine Wave';
+      case 'exponential': return 'Exponential Growth';
+      default: return 'Unknown Pattern';
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-12 text-gray-400">Loading patterns...</div>;
+  }
+
+  if (patterns.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400">
+        <div className="text-6xl mb-4">🔍</div>
+        <p>No patterns discovered yet</p>
+        <p className="text-sm mt-2">Upload your first dataset to get started!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {patterns.map((pattern) => (
+        <div 
+          key={pattern._id}
+          className="bg-purple-900/30 p-6 rounded-xl border border-purple-500/30 hover:border-purple-500 transition cursor-pointer"
+        >
+          <div className="text-5xl mb-3">{getPatternEmoji(pattern.patternType)}</div>
+          <h4 className="text-xl font-bold mb-2">{getPatternName(pattern.patternType)}</h4>
+          <p className="text-sm text-gray-400 mb-3">{pattern.originalName}</p>
+          <div className="space-y-1 text-sm">
+            <p className="text-purple-300">
+              Confidence: {(pattern.confidence * 100).toFixed(0)}%
+            </p>
+            <p className="text-gray-400">
+              Data Points: {pattern.dataPoints}
+            </p>
+            <p className="text-gray-400">
+              {new Date(pattern.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Main Dashboard Component
 function Dashboard() {
   const [user, setUser] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -59,10 +148,18 @@ function Dashboard() {
       const data = await response.json()
 
       if (response.ok) {
-        setUploadMessage(`✅ ${data.message}`)
-        setSelectedFile(null)
-        // Clear the file input
-        document.getElementById('fileInput').value = ''
+        // Show pattern detection results
+        const patternInfo = data.pattern;
+        setUploadMessage(
+          `✅ Pattern Detected: ${patternInfo.type.toUpperCase()} (${patternInfo.confidence} confidence, ${patternInfo.dataPoints} data points)`
+        );
+        setSelectedFile(null);
+        document.getElementById('fileInput').value = '';
+        
+        // Reload patterns after short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         setUploadMessage(`❌ ${data.message}`)
       }
@@ -151,7 +248,7 @@ function Dashboard() {
             
             {uploadMessage && (
               <div className="mt-4 p-3 bg-white/10 rounded-lg">
-                <p>{uploadMessage}</p>
+                <p className="whitespace-pre-line">{uploadMessage}</p>
               </div>
             )}
             
@@ -162,11 +259,7 @@ function Dashboard() {
         {/* Pattern History Section */}
         <div className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-purple-500/50">
           <h3 className="text-2xl font-bold mb-4">Your Pattern Discoveries</h3>
-          <div className="text-center py-12 text-gray-400">
-            <div className="text-6xl mb-4">🔍</div>
-            <p>No patterns discovered yet</p>
-            <p className="text-sm mt-2">Upload your first dataset to get started!</p>
-          </div>
+          <PatternList />
         </div>
       </div>
     </div>

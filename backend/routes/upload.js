@@ -3,25 +3,27 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const authMiddleware = require('../middleware/auth');
+const { detectPattern } = require('../utils/patternDetector');
+const Pattern = require('../models/Pattern');
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../uploads');
-    // Create uploads directory if it doesn't exist
+    const uploadDir = path.join(__dirname, '..', 'uploads');
+    
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
+    
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    // Create unique filename: timestamp-originalname
     const uniqueName = Date.now() + '-' + file.originalname;
     cb(null, uniqueName);
   }
 });
 
-// File filter - only accept CSV files
 const fileFilter = (req, file, cb) => {
   if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
     cb(null, true);
@@ -30,34 +32,67 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure upload
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024
   }
 });
 
-// Upload endpoint
-router.post('/csv', upload.single('file'), async (req, res) => {
+// Upload endpoint with pattern detection
+router.post('/csv', authMiddleware, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     console.log('File uploaded:', req.file.filename);
+    console.log('Detecting patterns...');
 
-    res.json({
-      message: 'File uploaded successfully!',
+    // Detect pattern in the uploaded file
+    const patternResult = await detectPattern(req.file.path);
+    
+    console.log('Pattern detected:', patternResult);
+
+    // Save pattern to database
+    const pattern = new Pattern({
+      userId: req.userId,
       filename: req.file.filename,
       originalName: req.file.originalname,
-      size: req.file.size,
-      path: req.file.path
+      patternType: patternResult.patternType,
+      confidence: patternResult.confidence,
+      dataPoints: patternResult.dataPoints,
+      summary: patternResult.summary
+    });
+
+    await pattern.save();
+
+    res.json({
+      message: 'File uploaded and analyzed successfully!',
+      pattern: {
+        type: patternResult.patternType,
+        confidence: (patternResult.confidence * 100).toFixed(0) + '%',
+        dataPoints: patternResult.dataPoints
+      }
     });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
+});
+
+// Get user's patterns
+router.get('/patterns', authMiddleware, async (req, res) => {
+  try {
+    const patterns = await Pattern.find({ userId: req.userId })
+      .sort({ createdAt: -1 })
+      .limit(10);
+    
+    res.json(patterns);
+  } catch (error) {
+    console.error('Error fetching patterns:', error);
+    res.status(500).json({ message: 'Failed to fetch patterns' });
   }
 });
 
